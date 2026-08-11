@@ -1,10 +1,11 @@
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import assets from '../assets/assets';
-import { AuthContext } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
 
 const ProfilePage = () => {
-    const { authUser, updateProfile } = useContext(AuthContext);
+    const authUser  = useAuthStore((state) => state.authUser);
+    const updateProfile = useAuthStore((state) => state.updateProfile);
     const [selectedImg, setSelectedImg] = useState<File | null>(null);
     const navigate = useNavigate();
     const [name, setName] = useState(authUser.fullName);

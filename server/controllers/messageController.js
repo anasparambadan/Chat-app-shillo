@@ -6,45 +6,44 @@ import { io, userSocketMap } from "../server.js";
 // Get all users excluding the current user
 
 export const getUsersForSidebar = async (req, res) => {
-    console.log("getUsersForSidebar called");
 
-    try {
-        const userId = req.user._id;
+  try {
+    const userId = req.user._id;
 
-        const filteredUsers = await User.find({
-            _id: { $ne: userId },
-        }).select("-password");
+    const filteredUsers = await User.find({
+      _id: { $ne: userId },
+    }).select("-password");
 
-        const unseenMessages = {};
+    const unseenMessages = {};
 
-        const promises = filteredUsers.map(async (user) => {
-            const messages = await Message.find({
-                senderId: user._id,
-                receiverId: userId,
-                seen: false,
-            });
+    const promises = filteredUsers.map(async (user) => {
+      const messages = await Message.find({
+        senderId: user._id,
+        receiverId: userId,
+        seen: false,
+      });
 
-            if (messages.length > 0) {
-                unseenMessages[user._id] = messages.length;
-            }
-        });
+      if (messages.length > 0) {
+        unseenMessages[user._id] = messages.length;
+      }
+    });
 
-        // Wait for all users' message queries to finish
-        await Promise.all(promises);
+    // Wait for all users' message queries to finish
+    await Promise.all(promises);
 
-        res.json({
-            success: true,
-            users: filteredUsers,
-            unseenMessages,
-        });
-    } catch (error) {
-        console.error("Error fetching users for sidebar:", error);
+    res.json({
+      success: true,
+      users: filteredUsers,
+      unseenMessages,
+    });
+  } catch (error) {
+    console.error("Error fetching users for sidebar:", error);
 
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
-    }
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 // get all messages for selected user
 
@@ -87,7 +86,7 @@ export const markMessageSee = async (req, res) => {
 
 export const sendMessage = async (req, res) => {
   try {
-    const { text = '', image } = req.body;
+    const { text = "", image } = req.body;
     const receiverId = req.params.id;
     const senderId = req.user._id;
 
@@ -98,11 +97,11 @@ export const sendMessage = async (req, res) => {
       imageUrl = uploadResponse.secure_url;
     }
     const newMessage = await Message.create({
-    senderId,
-    receiverId,
-    text,
-    image: imageUrl || '',
-});
+      senderId,
+      receiverId,
+      text,
+      image: imageUrl || "",
+    });
 
     // emit the new message to the receiver
     const receiverSocketId = userSocketMap[receiverId];

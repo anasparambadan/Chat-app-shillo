@@ -1,11 +1,13 @@
-import React, { useContext, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import assets from '../assets/assets';
-import { ChatContext } from '../context/ChatContext';
-import { AuthContext } from '../context/AuthContext';
+import { useAuthStore } from '../store/authStore';
+import { useChatStore } from '../store/chatStore';
 
 const RightSidebar = () => {
-    const { selectedUser, messages } = useContext(ChatContext);
-    const { logout, onlineUsers } = useContext(AuthContext);
+    const selectedUser = useChatStore((state) => state.selectedUser);
+    const messages = useChatStore((state) => state.messages);
+    const logout = useAuthStore((state) => state.logout);
+    const onlineUsers = useAuthStore((state) => state.onlineUsers);
     const [messageImages, setMessageImages] = React.useState<string[]>([]);
     useEffect(() => {
         setMessageImages(

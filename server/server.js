@@ -22,7 +22,6 @@ export const userSocketMap = {}; // {userID: socketId}
 
 io.on("connection", (socket) => {
   const userId = socket.handshake.query.userId;
-  console.log("New client connected", socket.id, "userId:", userId);
   if (userId) {
     userSocketMap[userId] = socket.id;
   }
@@ -32,7 +31,6 @@ io.on("connection", (socket) => {
   io.emit("getOnlineUsers", Object.keys(userSocketMap));
 
   socket.on("disconnect", () => {
-    console.log("Client disconnected", socket.id, userId);
     if (userId) {
       delete userSocketMap[userId];
     }
@@ -52,9 +50,6 @@ app.use("/api/auth", userRouter);
 app.use("/api/messages", messageRouter);
 
 // connect to database
-
-console.log(process.env.MONGO_URI);
-
 await connectDB();
 
 const PORT = process.env.PORT || 5000;

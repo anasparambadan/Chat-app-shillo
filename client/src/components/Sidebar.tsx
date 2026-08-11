@@ -1,21 +1,18 @@
 import { useNavigate } from 'react-router-dom';
 import assets from '../assets/assets';
-import { AuthContext } from '../context/AuthContext';
-import { useContext, useEffect, useState } from 'react';
-import { ChatContext } from '../context/ChatContext';
+import { useEffect, useState } from 'react';
+import { useAuthStore } from '../store/authStore';
+import { useChatStore } from '../store/chatStore';
 
 const Sidebar = () => {
-    const { logout, onlineUsers } = useContext(AuthContext);
-    const {
-        users,
-        getChatListUsers,
-        selectedUser,
-        setSelectedUser,
-        unseenMessages,
-        setUnseenMessages,
-    } = useContext(ChatContext);
-
-    console.log(selectedUser, 'selected user in sidebar');
+    const onlineUsers = useAuthStore((state) => state.onlineUsers);
+    const logout = useAuthStore((state) => state.logout);
+    const users = useChatStore((state) => state.users);
+    const getChatListUsers = useChatStore((state) => state.getChatListUsers);
+    const selectedUser = useChatStore((state) => state.selectedUser);
+    const setSelectedUser = useChatStore((state) => state.setSelectedUser);
+    const unseenMessages = useChatStore((state) => state.unseenMessages);
+    const clearUnseenMessages = useChatStore((state) => state.clearUnseenMessages);
 
     const [input, setInput] = useState('');
     const filteredUsers = users.filter((user) =>
@@ -67,7 +64,7 @@ const Sidebar = () => {
                         key={user._id}
                         onClick={() => {
                             setSelectedUser(user);
-                            setUnseenMessages((prev) => ({ ...prev, [user._id]: 0 }));
+                            clearUnseenMessages(user._id);
                         }}
                         className={`relative flex cursor-pointer items-center gap-2 rounded p-2 pl-4 max-sm:text-sm ${selectedUser?._id === user._id && 'bg-[#282142]/50'}`}
                     >

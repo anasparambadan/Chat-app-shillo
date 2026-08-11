@@ -1,6 +1,6 @@
 import assets from '../assets/assets';
-import { useContext, useState } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import { useState } from 'react';
+import { useAuthStore } from '../store/authStore';
 
 const LoginPage = () => {
     const [currentForm, setCurrentForm] = useState<'login' | 'signup'>('login');
@@ -10,7 +10,7 @@ const LoginPage = () => {
     const [bio, setBio] = useState('');
     const [isSubmitted, setIsSubmitted] = useState(false);
 
-    const { login } = useContext(AuthContext);
+    const login = useAuthStore((state) => state.login);
 
     const handleOnsubmit = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
