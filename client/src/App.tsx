@@ -5,7 +5,6 @@ import ProfilePage from './pages/ProfilePage';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './store/authStore';
 import { useEffect } from 'react';
-import axios from 'axios';
 
 const App = () => {
     const authUser = useAuthStore((state) => state.authUser);

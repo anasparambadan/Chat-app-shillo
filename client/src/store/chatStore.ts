@@ -8,13 +8,15 @@ interface ChatState {
     selectedUser: any;
     users: any[];
     unseenMessages: Record<string, number>;
-
     newMessageCount: number;
+    hasMoreMessages: boolean;
+    isLoadingMessages: boolean;
+    isLoadingMoreMessages: boolean;
 
     messageHandler: ((message: any) => void) | null;
 
     getChatListUsers: () => Promise<void>;
-    getMessages: (userId: string) => Promise<void>;
+    getMessages: (userId: string, before?: string) => Promise<void>;
 
     sendMessage: (userId: string, message?: string, image?: string) => Promise<void>;
 
@@ -34,6 +36,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     unseenMessages: {},
     newMessageCount: 0,
     messageHandler: null,
+    hasMoreMessages: true,
+    isLoadingMessages: false,
+    isLoadingMoreMessages: false,
 
     // GET CHAT LIST USERS
     getChatListUsers: async () => {
@@ -52,18 +57,48 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
 
     //get messages
-    getMessages: async (userId) => {
+    getMessages: async (userId, before) => {
         try {
-            const { data } = await axios.get(`/api/messages/${userId}`);
+            // Initial chat loading
+            if (!before) {
+                set({
+                    isLoadingMessages: true,
+                });
+            } else {
+                // Loading older messages
+                set({
+                    isLoadingMoreMessages: true,
+                });
+            }
+
+            const params = new URLSearchParams({
+                limit: '30',
+            });
+
+            if (before) {
+                params.set('before', before);
+            }
+
+            const { data } = await axios.get(`/api/messages/${userId}?${params.toString()}`);
 
             if (data.success) {
-                set({
-                    messages: data.messages,
-                    newMessageCount: 0,
-                });
+                set((state) => ({
+                    messages: before ? [...data.messages, ...state.messages] : data.messages,
+
+                    hasMoreMessages: data.hasMore,
+                    newMessageCount: before ? state.newMessageCount : 0,
+
+                    isLoadingMessages: false,
+                    isLoadingMoreMessages: false,
+                }));
             }
         } catch (error: any) {
             console.error('Error fetching chat:', error);
+
+            set({
+                isLoadingMessages: false,
+                isLoadingMoreMessages: false,
+            });
 
             toast.error(error.message || 'Failed to fetch chat');
         }

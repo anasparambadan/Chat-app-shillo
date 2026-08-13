@@ -15,6 +15,8 @@ const ChatContainer = () => {
     const onlineUsers = useAuthStore((state) => state.onlineUsers);
     const newMessageCount = useChatStore((state) => state.newMessageCount);
     const clearNewMessages = useChatStore((state) => state.clearNewMessages);
+    const hasMoreMessages = useChatStore((state) => state.hasMoreMessages);
+    const isLoadingMoreMessages = useChatStore((state) => state.isLoadingMoreMessages);
 
     const [input, setInput] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -23,28 +25,63 @@ const ChatContainer = () => {
     const isInitialLoad = useRef(true);
     const shouldScrollToBottom = useRef(false);
     const isNearBottom = useRef(true);
+    const isLoadingOlderMessages = useRef(false);
 
-    const handleScroll = () => {
-        const container = messagesContainerRef.current;
+    const handleScroll = async () => {
+    const container = messagesContainerRef.current;
 
-        if (!container) return;
+    if (!container || !selectedUser) return;
 
-        const distanceFromBottom =
-            container.scrollHeight - container.scrollTop - container.clientHeight;
+    const distanceFromBottom =
+        container.scrollHeight -
+        container.scrollTop -
+        container.clientHeight;
 
-        const nearBottom = distanceFromBottom <= 100;
+    const nearBottom = distanceFromBottom < 100;
 
-        isNearBottom.current = nearBottom;
+    isNearBottom.current = nearBottom;
 
-        if (nearBottom && newMessageCount > 0) {
-            clearNewMessages();
-        }
-    };
+    // User manually reached the bottom
+    if (nearBottom && newMessageCount > 0) {
+        clearNewMessages();
+    }
 
+    // Load older messages when reaching the top
+    if (
+        container.scrollTop <= 50 &&
+        hasMoreMessages &&
+        !isLoadingMoreMessages &&
+        !isLoadingOlderMessages.current
+    ) {
+        const oldestMessage = messages[0];
+
+        if (!oldestMessage) return;
+
+        isLoadingOlderMessages.current = true;
+
+        const previousScrollHeight = container.scrollHeight;
+        const previousScrollTop = container.scrollTop;
+
+        await getMessages(selectedUser._id, oldestMessage._id);
+
+        requestAnimationFrame(() => {
+            const newScrollHeight = container.scrollHeight;
+
+            container.scrollTop =
+                previousScrollTop +
+                (newScrollHeight - previousScrollHeight);
+
+            isLoadingOlderMessages.current = false;
+        });
+    }
+};
     useEffect(() => {
         if (!selectedUser) return;
 
         isInitialLoad.current = true;
+        isLoadingOlderMessages.current = false;
+        shouldScrollToBottom.current = false;
+        isNearBottom.current = true;
 
         getMessages(selectedUser._id);
 
@@ -58,15 +95,22 @@ const ChatContainer = () => {
         const container = messagesContainerRef.current;
 
         if (!container || !messages.length) return;
-        // first opening chat
 
+        // Initial chat load
         if (isInitialLoad.current) {
             container.scrollTop = container.scrollHeight;
 
             isInitialLoad.current = false;
             return;
         }
-        // sent a message
+
+        // Older messages were loaded.
+        // Do NOT scroll to bottom and do not clear new-message count.
+        if (isLoadingOlderMessages.current) {
+            return;
+        }
+
+        // We sent a message.
         if (shouldScrollToBottom.current) {
             container.scrollTo({
                 top: container.scrollHeight,
@@ -80,12 +124,13 @@ const ChatContainer = () => {
             return;
         }
 
-        // Someone else sent a message
+        // Someone else sent a message.
         if (isNearBottom.current) {
             container.scrollTo({
                 top: container.scrollHeight,
                 behavior: 'smooth',
             });
+
             clearNewMessages();
         }
     }, [messages, clearNewMessages]);
@@ -160,6 +205,11 @@ const ChatContainer = () => {
                 onScroll={handleScroll}
                 className="flex h-[calc(100%-120px)] flex-col overflow-y-scroll p-3 pb-6"
             >
+                {isLoadingMoreMessages && (
+                    <p className="py-2 text-center text-xs text-gray-500">
+                        Loading older messages...
+                    </p>
+                )}
                 {messages.map((message) => (
                     <div
                         key={message._id}

@@ -6,7 +6,6 @@ import { io, userSocketMap } from "../server.js";
 // Get all users excluding the current user
 
 export const getUsersForSidebar = async (req, res) => {
-
   try {
     const userId = req.user._id;
 
@@ -45,28 +44,84 @@ export const getUsersForSidebar = async (req, res) => {
     });
   }
 };
-// get all messages for selected user
 
+// get messages for selected user
 export const getMessages = async (req, res) => {
   try {
     const userId = req.user._id;
     const { id: selectedUserId } = req.params;
 
-    const messages = await Message.find({
+    const limit = Math.min(parseInt(req.query.limit) || 30, 50);
+    const before = req.query.before;
+
+    let cursorDate = null;
+
+    // If a cursor was provided, find that message first
+    if (before) {
+      const cursorMessage = await Message.findById(before).select("createdAt");
+
+      if (!cursorMessage) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid cursor",
+        });
+      }
+
+      cursorDate = cursorMessage.createdAt;
+    }
+
+    const query = {
       $or: [
         { senderId: userId, receiverId: selectedUserId },
         { senderId: selectedUserId, receiverId: userId },
       ],
-    }).sort({ createdAt: 1 });
+    };
+
+    // Only get messages older than the cursor
+    if (cursorDate) {
+      query.createdAt = { $lt: cursorDate };
+    }
+
+    // Get newest messages first
+    const messages = await Message.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit + 1);
+
+    // Check whether more older messages exist
+    const hasMore = messages.length > limit;
+
+    // Remove the extra message used to determine hasMore
+    if (hasMore) {
+      messages.pop();
+    }
+
+    // React expects oldest → newest
+    messages.reverse();
+
+    // Mark received messages as seen
     await Message.updateMany(
-      { senderId: selectedUserId, receiverId: userId, seen: false },
-      { $set: { seen: true } },
+      {
+        senderId: selectedUserId,
+        receiverId: userId,
+        seen: false,
+      },
+      {
+        $set: { seen: true },
+      },
     );
 
-    res.json({ success: true, messages });
+    res.json({
+      success: true,
+      messages,
+      hasMore,
+    });
   } catch (error) {
     console.error("Error fetching messages:", error);
-    res.status(500).json({ success: false, message: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
