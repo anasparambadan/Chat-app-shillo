@@ -19,7 +19,7 @@ export const getUsersForSidebar = async (req, res) => {
       const messages = await Message.find({
         senderId: user._id,
         receiverId: userId,
-        seen: false,
+        seenAt: null,
       });
 
       if (messages.length > 0) {
@@ -98,18 +98,6 @@ export const getMessages = async (req, res) => {
     // React expects oldest → newest
     messages.reverse();
 
-    // Mark received messages as seen
-    await Message.updateMany(
-      {
-        senderId: selectedUserId,
-        receiverId: userId,
-        seen: false,
-      },
-      {
-        $set: { seen: true },
-      },
-    );
-
     res.json({
       success: true,
       messages,
@@ -126,14 +114,59 @@ export const getMessages = async (req, res) => {
 };
 
 // mark individual message as seen
-export const markMessageSee = async (req, res) => {
+export const markMessagesSeen = async (req, res) => {
   try {
-    const { id } = req.params;
-    await Message.findByIdAndUpdate(id, { seen: true });
-    res.json({ success: true, message: "Message marked as seen" });
+    const userId = req.user._id;
+    const senderId = req.params.id;
+
+    const seenAt = new Date();
+
+    const messagesToMarkSeen = await Message.find({
+      senderId,
+      receiverId: userId,
+      seenAt: null,
+    }).select("_id");
+
+    if (messagesToMarkSeen.length === 0) {
+      return res.json({
+        success: true,
+        seenAt,
+        modifiedCount: 0,
+      });
+    }
+
+    const messageIds = messagesToMarkSeen.map((message) => message._id);
+
+    await Message.updateMany(
+      {
+        _id: { $in: messageIds },
+      },
+      {
+        $set: { seenAt },
+      },
+    );
+
+    const senderSocketId = userSocketMap[senderId.toString()];
+
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("messageSeen", {
+        messageIds: messageIds.map((id) => id.toString()),
+        seenAt,
+      });
+    }
+
+    res.json({
+      success: true,
+      seenAt,
+      modifiedCount: messageIds.length,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-    console.error("Error marking message as seen:", error);
+    console.error("Error marking messages as seen:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -159,7 +192,7 @@ export const sendMessage = async (req, res) => {
     });
 
     // emit the new message to the receiver
-    const receiverSocketId = userSocketMap[receiverId];
+    const receiverSocketId = userSocketMap[receiverId.toString()];
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("newMessage", newMessage);
     }

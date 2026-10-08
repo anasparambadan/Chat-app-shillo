@@ -17,6 +17,7 @@ const ChatContainer = () => {
     const clearNewMessages = useChatStore((state) => state.clearNewMessages);
     const hasMoreMessages = useChatStore((state) => state.hasMoreMessages);
     const isLoadingMoreMessages = useChatStore((state) => state.isLoadingMoreMessages);
+    const markMessagesSeen = useChatStore((state) => state.markMessagesSeen);
 
     const [input, setInput] = useState('');
     const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -26,55 +27,69 @@ const ChatContainer = () => {
     const shouldScrollToBottom = useRef(false);
     const isNearBottom = useRef(true);
     const isLoadingOlderMessages = useRef(false);
+    const isMarkingSeen = useRef(false);
+
+    const markCurrentChatAsSeen = async () => {
+        if (!selectedUser || isMarkingSeen.current) return;
+
+        isMarkingSeen.current = true;
+
+        try {
+            const success = await markMessagesSeen(selectedUser._id);
+
+            if (success) {
+                clearNewMessages();
+            }
+        } finally {
+            isMarkingSeen.current = false;
+        }
+    };
 
     const handleScroll = async () => {
-    const container = messagesContainerRef.current;
+        const container = messagesContainerRef.current;
 
-    if (!container || !selectedUser) return;
+        if (!container || !selectedUser) return;
 
-    const distanceFromBottom =
-        container.scrollHeight -
-        container.scrollTop -
-        container.clientHeight;
+        const distanceFromBottom =
+            container.scrollHeight - container.scrollTop - container.clientHeight;
 
-    const nearBottom = distanceFromBottom < 100;
+        const nearBottom = distanceFromBottom < 100;
 
-    isNearBottom.current = nearBottom;
+        isNearBottom.current = nearBottom;
 
-    // User manually reached the bottom
-    if (nearBottom && newMessageCount > 0) {
-        clearNewMessages();
-    }
+        // User reached the bottom
+        if (nearBottom) {
+            markCurrentChatAsSeen();
+        }
 
-    // Load older messages when reaching the top
-    if (
-        container.scrollTop <= 50 &&
-        hasMoreMessages &&
-        !isLoadingMoreMessages &&
-        !isLoadingOlderMessages.current
-    ) {
-        const oldestMessage = messages[0];
+        // Load older messages when reaching the top
+        if (
+            container.scrollTop <= 50 &&
+            hasMoreMessages &&
+            !isLoadingMoreMessages &&
+            !isLoadingOlderMessages.current
+        ) {
+            const oldestMessage = messages[0];
 
-        if (!oldestMessage) return;
+            if (!oldestMessage) return;
 
-        isLoadingOlderMessages.current = true;
+            isLoadingOlderMessages.current = true;
 
-        const previousScrollHeight = container.scrollHeight;
-        const previousScrollTop = container.scrollTop;
+            const previousScrollHeight = container.scrollHeight;
+            const previousScrollTop = container.scrollTop;
 
-        await getMessages(selectedUser._id, oldestMessage._id);
+            await getMessages(selectedUser._id, oldestMessage._id);
 
-        requestAnimationFrame(() => {
-            const newScrollHeight = container.scrollHeight;
+            requestAnimationFrame(() => {
+                const newScrollHeight = container.scrollHeight;
 
-            container.scrollTop =
-                previousScrollTop +
-                (newScrollHeight - previousScrollHeight);
+                container.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
 
-            isLoadingOlderMessages.current = false;
-        });
-    }
-};
+                isLoadingOlderMessages.current = false;
+            });
+        }
+    };
+
     useEffect(() => {
         if (!selectedUser) return;
 
@@ -99,13 +114,15 @@ const ChatContainer = () => {
         // Initial chat load
         if (isInitialLoad.current) {
             container.scrollTop = container.scrollHeight;
-
             isInitialLoad.current = false;
+
+            markCurrentChatAsSeen();
+
             return;
         }
 
         // Older messages were loaded.
-        // Do NOT scroll to bottom and do not clear new-message count.
+        // Do NOT scroll to bottom and do not mark them as seen.
         if (isLoadingOlderMessages.current) {
             return;
         }
@@ -119,21 +136,19 @@ const ChatContainer = () => {
 
             shouldScrollToBottom.current = false;
 
-            clearNewMessages();
-
             return;
         }
 
-        // Someone else sent a message.
+        // Someone else sent a message while we were near the bottom.
         if (isNearBottom.current) {
             container.scrollTo({
                 top: container.scrollHeight,
                 behavior: 'smooth',
             });
 
-            clearNewMessages();
+            markCurrentChatAsSeen();
         }
-    }, [messages, clearNewMessages]);
+    }, [messages, selectedUser]);
 
     const handleSendMessage = async (e?: React.FormEvent | React.KeyboardEvent) => {
         e?.preventDefault();
@@ -170,6 +185,18 @@ const ChatContainer = () => {
 
         reader.readAsDataURL(file);
         e.target.value = '';
+    };
+
+    const getMessageStatus = (message: any) => {
+        if (message.seenAt) {
+            return <span className="text-blue-500">✓✓</span>;
+        }
+
+        if (message.deliveredAt) {
+            return <span className="text-gray-400">✓✓</span>;
+        }
+
+        return <span className="text-gray-400">✓</span>;
     };
 
     return selectedUser ? (
@@ -246,7 +273,15 @@ const ChatContainer = () => {
                                 className="h-7 w-7 rounded-full object-cover"
                             />
 
-                            <p className="text-gray-500">{formatMessageTime(message.createdAt)}</p>
+                            <div className="flex items-center justify-center gap-1">
+                                <p className="text-gray-500">
+                                    {formatMessageTime(message.createdAt)}
+                                </p>
+
+                                {message.senderId === authUser._id && (
+                                    <p className="mt-0.5 text-xs">{getMessageStatus(message)}</p>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -260,7 +295,7 @@ const ChatContainer = () => {
                             behavior: 'smooth',
                         });
 
-                        clearNewMessages();
+                        markCurrentChatAsSeen();
                     }}
                     className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-violet-600 px-4 py-2 text-sm text-white shadow-lg"
                 >
